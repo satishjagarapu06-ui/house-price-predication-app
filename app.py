@@ -1,6 +1,10 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import sys
+import streamlit as st
+
+st.write("Python version:", sys.version)
 
 st.set_page_config(page_title="House Price Prediction", layout="centered")
 
