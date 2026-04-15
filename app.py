@@ -7,10 +7,11 @@ st.set_page_config(page_title="House Price Prediction", layout="centered")
 st.title("House Price Prediction App")
 st.write("Enter house details to predict the sale price.")
 
- 
+# Load model and data
 model = joblib.load("model.pkl")
 data = pd.read_csv("AmesHousing.csv")
 
+# User inputs
 user_input = {
     "Overall Qual": st.slider("Overall Quality", 1, 10, 5),
     "Gr Liv Area": st.number_input("Ground Living Area", min_value=300, max_value=6000, value=1500),
@@ -50,32 +51,37 @@ for col in data.columns:
         if data[col].dtype == "object":
             input_df[col] = data[col].mode()[0]
         else:
-             for col in input_df.columns:
-    if data[col].dtype == 'object':
-        # categorical → use most frequent value
-        input_df[col] = data[col].mode()[0]
-    else:
-        # numeric → use median
-        input_df[col] = data[col].median()
+            input_df[col] = data[col].median()
 
 # Feature engineering to match training
 input_df["TotalBath"] = (
-    input_df["Full Bath"] +
-    0.5 * input_df["Half Bath"] +
-    input_df["Bsmt Full Bath"] +
-    0.5 * input_df["Bsmt Half Bath"]
+    input_df["Full Bath"]
+    + 0.5 * input_df["Half Bath"]
+    + input_df["Bsmt Full Bath"]
+    + 0.5 * input_df["Bsmt Half Bath"]
 )
 
 input_df["GarageScore"] = input_df["Garage Cars"] * input_df["Garage Area"]
 input_df["HouseAgeAtSale"] = input_df["Yr Sold"] - input_df["Year Built"]
 input_df["YearsSinceRemodel"] = input_df["Yr Sold"] - input_df["Year Remod/Add"]
 
-# Ensure column order roughly matches training
-train_cols = [col for col in data.columns if col != "SalePrice"]
-for engineered_col in ["TotalBath", "GarageScore", "HouseAgeAtSale", "YearsSinceRemodel"]:
+# If your training used this engineered feature, include it too
+input_df["TotalLivableSF"] = (
+    input_df["Total Bsmt SF"] + input_df["1st Flr SF"] + input_df["2nd Flr SF"]
+)
+
+# Ensure all engineered columns exist
+for engineered_col in [
+    "TotalBath",
+    "GarageScore",
+    "HouseAgeAtSale",
+    "YearsSinceRemodel",
+    "TotalLivableSF",
+]:
     if engineered_col not in input_df.columns:
         input_df[engineered_col] = 0
 
+# Predict
 if st.button("Predict Price"):
     prediction = model.predict(input_df)[0]
     st.success(f"Predicted House Price: ${prediction:,.2f}")
