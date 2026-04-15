@@ -50,7 +50,13 @@ for col in data.columns:
         if data[col].dtype == "object":
             input_df[col] = data[col].mode()[0]
         else:
-            input_df[col] = data[col].median()
+             for col in input_df.columns:
+    if data[col].dtype == 'object':
+        # categorical → use most frequent value
+        input_df[col] = data[col].mode()[0]
+    else:
+        # numeric → use median
+        input_df[col] = data[col].median()
 
 # Feature engineering to match training
 input_df["TotalBath"] = (
