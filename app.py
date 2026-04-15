@@ -7,7 +7,8 @@ st.set_page_config(page_title="House Price Prediction", layout="centered")
 st.title("House Price Prediction App")
 st.write("Enter house details to predict the sale price.")
 
-model = joblib.load("best_ames_house_price_model.pkl")
+ 
+model = joblib.load("model.pkl")
 data = pd.read_csv("AmesHousing.csv")
 
 user_input = {
