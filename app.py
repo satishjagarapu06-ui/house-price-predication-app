@@ -2,36 +2,34 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-# Page config
+# ================= PAGE CONFIG =================
 st.set_page_config(page_title="House Price Prediction", layout="centered")
 
 st.title("House Price Prediction App")
 st.write("Enter house details to predict the sale price.")
 
-# Load model and dataset
+# ================= LOAD MODEL + DATA =================
 model = joblib.load("model.pkl")
 data = pd.read_csv("AmesHousing.csv")
-
-# Clean column names just in case
 data.columns = data.columns.str.strip()
 
 # ================= USER INPUT =================
 user_input = {
     "Overall Qual": st.slider("Overall Quality", 1, 10, 5),
-    "Gr Liv Area": st.number_input("Ground Living Area", 300, 6000, 1500),
+    "Gr Liv Area": st.number_input("Ground Living Area", min_value=300, max_value=6000, value=1500),
     "Garage Cars": st.slider("Garage Capacity (Cars)", 0, 5, 2),
-    "Garage Area": st.number_input("Garage Area", 0, 2000, 500),
-    "Total Bsmt SF": st.number_input("Total Basement Area", 0, 4000, 800),
-    "1st Flr SF": st.number_input("1st Floor Area", 300, 3000, 1000),
-    "2nd Flr SF": st.number_input("2nd Floor Area", 0, 3000, 0),
+    "Garage Area": st.number_input("Garage Area", min_value=0, max_value=2000, value=500),
+    "Total Bsmt SF": st.number_input("Total Basement Area", min_value=0, max_value=4000, value=800),
+    "1st Flr SF": st.number_input("1st Floor Area", min_value=300, max_value=3000, value=1000),
+    "2nd Flr SF": st.number_input("2nd Floor Area", min_value=0, max_value=3000, value=0),
     "Full Bath": st.slider("Full Bathrooms", 0, 5, 2),
     "Half Bath": st.slider("Half Bathrooms", 0, 3, 1),
     "Bsmt Full Bath": st.slider("Basement Full Bathrooms", 0, 3, 0),
     "Bsmt Half Bath": st.slider("Basement Half Bathrooms", 0, 2, 0),
-    "Year Built": st.number_input("Year Built", 1800, 2025, 2000),
-    "Year Remod/Add": st.number_input("Year Remodeled", 1800, 2025, 2005),
-    "Yr Sold": st.number_input("Year Sold", 2006, 2025, 2010),
-    "Lot Area": st.number_input("Lot Area", 1000, 100000, 10000),
+    "Year Built": st.number_input("Year Built", min_value=1800, max_value=2025, value=2000),
+    "Year Remod/Add": st.number_input("Year Remodeled", min_value=1800, max_value=2025, value=2005),
+    "Yr Sold": st.number_input("Year Sold", min_value=2006, max_value=2025, value=2010),
+    "Lot Area": st.number_input("Lot Area", min_value=1000, max_value=100000, value=10000),
     "Overall Cond": st.slider("Overall Condition", 1, 10, 5),
     "Fireplaces": st.slider("Number of Fireplaces", 0, 4, 1),
 
@@ -71,7 +69,7 @@ user_input = {
     "Sale Condition": st.selectbox(
         "Sale Condition",
         sorted(data["Sale Condition"].dropna().astype(str).unique())
-    )
+    ),
 }
 
 # Convert to DataFrame
@@ -94,20 +92,28 @@ input_df["TotalLivableSF"] = (
     + input_df["2nd Flr SF"]
 )
 
+# ================= EXPECTED MODEL COLUMNS =================
+# Best case: model exposes the exact training columns
+if hasattr(model, "feature_names_in_"):
+    expected_cols = list(model.feature_names_in_)
+else:
+    # Fallback: use current columns if model doesn't expose names
+    expected_cols = list(input_df.columns)
+
 # ================= FILL MISSING COLUMNS =================
-# Use all columns from training data except target
-feature_cols = [col for col in data.columns if col != "SalePrice"]
-
-for col in feature_cols:
+for col in expected_cols:
     if col not in input_df.columns:
-        if pd.api.types.is_numeric_dtype(data[col]):
-            numeric_col = pd.to_numeric(data[col], errors="coerce")
-            input_df[col] = numeric_col.median()
+        if col in data.columns:
+            if pd.api.types.is_numeric_dtype(data[col]):
+                input_df[col] = pd.to_numeric(data[col], errors="coerce").median()
+            else:
+                non_null = data[col].dropna().astype(str)
+                input_df[col] = non_null.mode()[0] if not non_null.empty else ""
         else:
-            non_null = data[col].dropna().astype(str)
-            input_df[col] = non_null.mode()[0] if not non_null.empty else ""
+            # Engineered or unknown feature missing from raw dataset
+            input_df[col] = 0
 
-# ================= MATCH DATA TYPES =================
+# ================= TYPE ALIGNMENT =================
 for col in input_df.columns:
     if col in data.columns:
         if pd.api.types.is_numeric_dtype(data[col]):
@@ -115,9 +121,8 @@ for col in input_df.columns:
         else:
             input_df[col] = input_df[col].astype(str)
 
-# ================= ALIGN COLUMN ORDER =================
-# This is important so model gets columns in expected order
-input_df = input_df.reindex(columns=feature_cols)
+# ================= REMOVE EXTRA COLUMNS + ORDER MATCH =================
+input_df = input_df.reindex(columns=expected_cols, fill_value=0)
 
 # ================= PREDICTION =================
 if st.button("Predict Price"):
@@ -125,7 +130,7 @@ if st.button("Predict Price"):
         prediction = model.predict(input_df)[0]
         st.success(f"Predicted House Price: ${prediction:,.2f}")
 
-        with st.expander("Show input data used for prediction"):
+        with st.expander("Show processed input used for prediction"):
             st.dataframe(input_df)
 
     except Exception as e:
