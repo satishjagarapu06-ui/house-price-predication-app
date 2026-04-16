@@ -41,9 +41,10 @@ user_input = {
     "Sale Condition": st.selectbox("Sale Condition", sorted(data["Sale Condition"].dropna().unique()))
 }
 
+# Start with user-entered values
 input_df = pd.DataFrame([user_input])
 
-# Add missing columns with default values from original dataset
+# Add all missing columns from training data
 for col in data.columns:
     if col == "SalePrice":
         continue
@@ -64,22 +65,9 @@ input_df["TotalBath"] = (
 input_df["GarageScore"] = input_df["Garage Cars"] * input_df["Garage Area"]
 input_df["HouseAgeAtSale"] = input_df["Yr Sold"] - input_df["Year Built"]
 input_df["YearsSinceRemodel"] = input_df["Yr Sold"] - input_df["Year Remod/Add"]
-
-# If your training used this engineered feature, include it too
 input_df["TotalLivableSF"] = (
     input_df["Total Bsmt SF"] + input_df["1st Flr SF"] + input_df["2nd Flr SF"]
 )
-
-# Ensure all engineered columns exist
-for engineered_col in [
-    "TotalBath",
-    "GarageScore",
-    "HouseAgeAtSale",
-    "YearsSinceRemodel",
-    "TotalLivableSF",
-]:
-    if engineered_col not in input_df.columns:
-        input_df[engineered_col] = 0
 
 # Predict
 if st.button("Predict Price"):
