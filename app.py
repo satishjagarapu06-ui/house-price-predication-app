@@ -12,6 +12,9 @@ st.write("Enter house details to predict the sale price.")
 model = joblib.load("model.pkl")
 data = pd.read_csv("AmesHousing.csv")
 
+# Clean column names just in case
+data.columns = data.columns.str.strip()
+
 # ================= USER INPUT =================
 user_input = {
     "Overall Qual": st.slider("Overall Quality", 1, 10, 5),
@@ -33,29 +36,46 @@ user_input = {
     "Fireplaces": st.slider("Number of Fireplaces", 0, 4, 1),
 
     # Categorical inputs
-    "Neighborhood": st.selectbox("Neighborhood", sorted(data["Neighborhood"].dropna().unique())),
-    "House Style": st.selectbox("House Style", sorted(data["House Style"].dropna().unique())),
-    "MS Zoning": st.selectbox("MS Zoning", sorted(data["MS Zoning"].dropna().unique())),
-    "Central Air": st.selectbox("Central Air", sorted(data["Central Air"].dropna().unique())),
-    "Kitchen Qual": st.selectbox("Kitchen Quality", sorted(data["Kitchen Qual"].dropna().unique())),
-    "Garage Finish": st.selectbox("Garage Finish", sorted(data["Garage Finish"].dropna().astype(str).unique())),
-    "Paved Drive": st.selectbox("Paved Drive", sorted(data["Paved Drive"].dropna().unique())),
-    "Sale Type": st.selectbox("Sale Type", sorted(data["Sale Type"].dropna().unique())),
-    "Sale Condition": st.selectbox("Sale Condition", sorted(data["Sale Condition"].dropna().unique()))
+    "Neighborhood": st.selectbox(
+        "Neighborhood",
+        sorted(data["Neighborhood"].dropna().astype(str).unique())
+    ),
+    "House Style": st.selectbox(
+        "House Style",
+        sorted(data["House Style"].dropna().astype(str).unique())
+    ),
+    "MS Zoning": st.selectbox(
+        "MS Zoning",
+        sorted(data["MS Zoning"].dropna().astype(str).unique())
+    ),
+    "Central Air": st.selectbox(
+        "Central Air",
+        sorted(data["Central Air"].dropna().astype(str).unique())
+    ),
+    "Kitchen Qual": st.selectbox(
+        "Kitchen Quality",
+        sorted(data["Kitchen Qual"].dropna().astype(str).unique())
+    ),
+    "Garage Finish": st.selectbox(
+        "Garage Finish",
+        sorted(data["Garage Finish"].dropna().astype(str).unique())
+    ),
+    "Paved Drive": st.selectbox(
+        "Paved Drive",
+        sorted(data["Paved Drive"].dropna().astype(str).unique())
+    ),
+    "Sale Type": st.selectbox(
+        "Sale Type",
+        sorted(data["Sale Type"].dropna().astype(str).unique())
+    ),
+    "Sale Condition": st.selectbox(
+        "Sale Condition",
+        sorted(data["Sale Condition"].dropna().astype(str).unique())
+    )
 }
 
 # Convert to DataFrame
 input_df = pd.DataFrame([user_input])
-
-# ================= FIX MISSING COLUMNS =================
-for col in data.columns:
-    if col == "SalePrice":
-        continue
-    if col not in input_df.columns:
-        if data[col].dtype == "object":
-            input_df[col] = data[col].mode()[0]   # categorical
-        else:
-            input_df[col] = data[col].median()   # numeric
 
 # ================= FEATURE ENGINEERING =================
 input_df["TotalBath"] = (
@@ -68,17 +88,45 @@ input_df["TotalBath"] = (
 input_df["GarageScore"] = input_df["Garage Cars"] * input_df["Garage Area"]
 input_df["HouseAgeAtSale"] = input_df["Yr Sold"] - input_df["Year Built"]
 input_df["YearsSinceRemodel"] = input_df["Yr Sold"] - input_df["Year Remod/Add"]
-
 input_df["TotalLivableSF"] = (
     input_df["Total Bsmt SF"]
     + input_df["1st Flr SF"]
     + input_df["2nd Flr SF"]
 )
 
+# ================= FILL MISSING COLUMNS =================
+# Use all columns from training data except target
+feature_cols = [col for col in data.columns if col != "SalePrice"]
+
+for col in feature_cols:
+    if col not in input_df.columns:
+        if pd.api.types.is_numeric_dtype(data[col]):
+            numeric_col = pd.to_numeric(data[col], errors="coerce")
+            input_df[col] = numeric_col.median()
+        else:
+            non_null = data[col].dropna().astype(str)
+            input_df[col] = non_null.mode()[0] if not non_null.empty else ""
+
+# ================= MATCH DATA TYPES =================
+for col in input_df.columns:
+    if col in data.columns:
+        if pd.api.types.is_numeric_dtype(data[col]):
+            input_df[col] = pd.to_numeric(input_df[col], errors="coerce")
+        else:
+            input_df[col] = input_df[col].astype(str)
+
+# ================= ALIGN COLUMN ORDER =================
+# This is important so model gets columns in expected order
+input_df = input_df.reindex(columns=feature_cols)
+
 # ================= PREDICTION =================
 if st.button("Predict Price"):
     try:
         prediction = model.predict(input_df)[0]
         st.success(f"Predicted House Price: ${prediction:,.2f}")
+
+        with st.expander("Show input data used for prediction"):
+            st.dataframe(input_df)
+
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Prediction failed: {e}")
